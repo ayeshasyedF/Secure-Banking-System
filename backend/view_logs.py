@@ -1,4 +1,4 @@
-from audit import read_decrypted_logs
+from backend.audit import read_decrypted_logs
 
 
 def main():

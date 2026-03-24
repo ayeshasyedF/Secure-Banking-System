@@ -1,5 +1,5 @@
 import hashlib
-from database_handler import find_user
+from backend.database_handler import find_user
 
 
 def hash_password(password):
@@ -13,8 +13,4 @@ def authenticate_user(username, password):
         return False
 
     entered_hash = hash_password(password)
-
-    if user["password"] == entered_hash:
-        return True
-
-    return False
+    return user["password"] == entered_hash

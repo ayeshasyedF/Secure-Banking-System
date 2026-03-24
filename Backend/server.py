@@ -1,7 +1,7 @@
 import socket
-from auth import authenticate_user
-from transaction import handle_transaction
-from audit import write_log
+from backend.auth import authenticate_user
+from backend.transaction import handle_transaction
+from backend.audit import write_log
 
 HOST = "127.0.0.1"
 PORT = 5000

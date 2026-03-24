@@ -1,5 +1,10 @@
-from database_handler import get_balance, deposit_money, withdraw_money, transfer_money
-from audit import write_log
+from backend.database_handler import (
+    get_balance,
+    deposit_money,
+    withdraw_money,
+    transfer_money,
+)
+from backend.audit import write_log
 
 
 def handle_transaction(username, message):

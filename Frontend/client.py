@@ -82,23 +82,18 @@ def main():
 
         if choice == "1":
             transaction_message = "BALANCE"
-
         elif choice == "2":
             amount = input("Enter amount to deposit: ")
             transaction_message = f"DEPOSIT,{amount}"
-
         elif choice == "3":
             amount = input("Enter amount to withdraw: ")
             transaction_message = f"WITHDRAW,{amount}"
-
         elif choice == "4":
             receiver = input("Enter receiver username: ")
             amount = input("Enter amount to transfer: ")
             transaction_message = f"TRANSFER,{receiver},{amount}"
-
         elif choice == "5":
             transaction_message = "EXIT"
-
         else:
             print("Invalid choice. Try again.")
             continue
