@@ -1,13 +1,14 @@
+import json
+import os
 import socket
 
+from backend.auth import hash_password, verify_server_auth, derive_master_secret
+from crypto.hmac_utils import generate_hmac
 from crypto.kdf_utils import derive_keys
-from crypto.crypto_utils import secure_send, secure_receive
+from crypto.crypto_utils import secure_send, secure_receive, send_packet, receive_packet
 
 HOST = "127.0.0.1"
 PORT = 5000
-
-MASTER_SECRET = "SECURE_BANKING_MASTER_SECRET_2026"
-ENCRYPTION_KEY, MAC_KEY = derive_keys(MASTER_SECRET)
 
 
 def print_menu():
@@ -73,17 +74,81 @@ def main():
     username = input("Enter username: ")
     password = input("Enter password: ")
 
-    login_message = f"{username},{password}"
+    auth_key = hash_password(password)
+    client_nonce = os.urandom(16).hex()
+
+    message_1 = f"{username}|{client_nonce}"
+    client_hmac = generate_hmac(message_1, auth_key)
 
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((HOST, PORT))
 
-    secure_send(client_socket, login_message, ENCRYPTION_KEY, MAC_KEY)
+    # -------------------------------
+    # Message 1: client -> server
+    # -------------------------------
+    packet_1 = {
+        "type": "KEY_EXCHANGE_1",
+        "username": username,
+        "client_nonce": client_nonce,
+        "hmac": client_hmac
+    }
 
+    send_packet(client_socket, json.dumps(packet_1))
+
+    # -------------------------------
+    # Message 2: server -> client
+    # -------------------------------
+    packet_text = receive_packet(client_socket)
+
+    if packet_text is None:
+        print("Server closed the connection.")
+        client_socket.close()
+        return
+
+    try:
+        packet_2 = json.loads(packet_text)
+    except json.JSONDecodeError:
+        print("Invalid response from server.")
+        client_socket.close()
+        return
+
+    if packet_2.get("type") == "KEY_EXCHANGE_ERROR":
+        print("Key exchange failed:", packet_2.get("message"))
+        client_socket.close()
+        return
+
+    if packet_2.get("type") != "KEY_EXCHANGE_2":
+        print("Unexpected protocol response.")
+        client_socket.close()
+        return
+
+    server_nonce = packet_2.get("server_nonce")
+    server_hmac = packet_2.get("hmac")
+
+    valid_server = verify_server_auth(
+        username,
+        client_nonce,
+        server_nonce,
+        server_hmac,
+        auth_key
+    )
+
+    if not valid_server:
+        print("Server authentication failed.")
+        client_socket.close()
+        return
+
+    # -------------------------------
+    # Derive Master Secret and session keys
+    # -------------------------------
+    master_secret = derive_master_secret(auth_key, client_nonce, server_nonce)
+    encryption_key, mac_key = derive_keys(master_secret)
+
+    # Secure confirmation
     login_reply, error = secure_receive(
         client_socket,
-        ENCRYPTION_KEY,
-        MAC_KEY,
+        encryption_key,
+        mac_key,
         "CLIENT"
     )
 
@@ -120,12 +185,12 @@ def main():
             print("Invalid choice. Try again.")
             continue
 
-        secure_send(client_socket, transaction_message, ENCRYPTION_KEY, MAC_KEY)
+        secure_send(client_socket, transaction_message, encryption_key, mac_key)
 
         transaction_reply, error = secure_receive(
             client_socket,
-            ENCRYPTION_KEY,
-            MAC_KEY,
+            encryption_key,
+            mac_key,
             "CLIENT"
         )
 
