@@ -1,10 +1,22 @@
 import socket
+
 from backend.auth import authenticate_user
 from backend.transaction import handle_transaction
 from backend.audit import write_log
+from crypto.kdf_utils import derive_keys
+from crypto.crypto_utils import secure_send, secure_receive
 
 HOST = "127.0.0.1"
 PORT = 5000
+
+MASTER_SECRET = "SECURE_BANKING_MASTER_SECRET_2026"
+ENCRYPTION_KEY, MAC_KEY = derive_keys(MASTER_SECRET)
+
+print("\n=== KEY DERIVATION ===")
+print("Master Secret:", MASTER_SECRET)
+print("Encryption Key:", ENCRYPTION_KEY)
+print("MAC Key:", MAC_KEY)
+print("======================\n")
 
 
 def handle_client(client_socket, client_address):
@@ -12,19 +24,26 @@ def handle_client(client_socket, client_address):
     logged_in_user = None
 
     try:
-        login_message = client_socket.recv(1024).decode()
+        login_message, error = secure_receive(
+            client_socket,
+            ENCRYPTION_KEY,
+            MAC_KEY,
+            "SERVER"
+        )
 
-        if not login_message:
+        if error is not None:
+            print("Secure receive error during login:", error)
+            write_log("UNKNOWN", "LOGIN_FAILED", f"Secure receive error: {error}")
+            secure_send(client_socket, "ERROR,SECURE_COMMUNICATION_FAILED", ENCRYPTION_KEY, MAC_KEY)
             client_socket.close()
             return
 
-        print("Client sent login:", login_message)
+        print("Client sent secure login:", login_message)
 
         parts = login_message.split(",")
 
         if len(parts) != 2:
-            response = "INVALID_FORMAT"
-            client_socket.send(response.encode())
+            secure_send(client_socket, "INVALID_FORMAT", ENCRYPTION_KEY, MAC_KEY)
             write_log("UNKNOWN", "LOGIN_FAILED", "Invalid login format")
             client_socket.close()
             return
@@ -40,22 +59,33 @@ def handle_client(client_socket, client_address):
             response = "LOGIN_FAILED"
             write_log(username, "LOGIN_FAILED", "Wrong username or password")
 
-        client_socket.send(response.encode())
+        secure_send(client_socket, response, ENCRYPTION_KEY, MAC_KEY)
 
         if logged_in_user is None:
             client_socket.close()
             return
 
         while True:
-            transaction_message = client_socket.recv(1024).decode()
+            transaction_message, error = secure_receive(
+                client_socket,
+                ENCRYPTION_KEY,
+                MAC_KEY,
+                "SERVER"
+            )
 
-            if not transaction_message:
+            if error == "NO_DATA":
                 break
 
-            print("Client sent transaction:", transaction_message)
+            if error is not None:
+                print("Secure receive error during transaction:", error)
+                write_log(logged_in_user, "SECURE_RECEIVE_FAILED", error)
+                secure_send(client_socket, "ERROR,SECURE_COMMUNICATION_FAILED", ENCRYPTION_KEY, MAC_KEY)
+                break
+
+            print("Client sent secure transaction:", transaction_message)
 
             transaction_response = handle_transaction(logged_in_user, transaction_message)
-            client_socket.send(transaction_response.encode())
+            secure_send(client_socket, transaction_response, ENCRYPTION_KEY, MAC_KEY)
 
             if transaction_response == "GOODBYE":
                 break

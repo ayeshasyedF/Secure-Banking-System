@@ -1,7 +1,13 @@
 import socket
 
+from crypto.kdf_utils import derive_keys
+from crypto.crypto_utils import secure_send, secure_receive
+
 HOST = "127.0.0.1"
 PORT = 5000
+
+MASTER_SECRET = "SECURE_BANKING_MASTER_SECRET_2026"
+ENCRYPTION_KEY, MAC_KEY = derive_keys(MASTER_SECRET)
 
 
 def print_menu():
@@ -28,6 +34,15 @@ def format_server_reply(reply):
     elif parts[0] == "TRANSFER_SUCCESS":
         return f"Transfer successful. New balance: ${parts[1]}"
 
+    elif parts[0] == "LOGIN_SUCCESS":
+        return "Login successful."
+
+    elif parts[0] == "LOGIN_FAILED":
+        return "Login failed. Please check your username or password."
+
+    elif parts[0] == "INVALID_FORMAT":
+        return "Invalid message format."
+
     elif parts[0] == "ERROR":
         if len(parts) > 1:
             if parts[1] == "INSUFFICIENT_FUNDS":
@@ -44,6 +59,8 @@ def format_server_reply(reply):
                 return "Transfer failed: invalid format."
             elif parts[1] == "UNKNOWN_COMMAND":
                 return "Unknown command."
+            elif parts[1] == "SECURE_COMMUNICATION_FAILED":
+                return "Secure communication failed."
         return "An error occurred."
 
     elif parts[0] == "GOODBYE":
@@ -61,18 +78,23 @@ def main():
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((HOST, PORT))
 
-    client_socket.send(login_message.encode())
+    secure_send(client_socket, login_message, ENCRYPTION_KEY, MAC_KEY)
 
-    login_reply = client_socket.recv(1024).decode()
+    login_reply, error = secure_receive(
+        client_socket,
+        ENCRYPTION_KEY,
+        MAC_KEY,
+        "CLIENT"
+    )
 
-    if login_reply == "LOGIN_SUCCESS":
-        print("Login successful.")
-    elif login_reply == "LOGIN_FAILED":
-        print("Login failed. Please check your username or password.")
+    if error is not None:
+        print("Could not securely receive server reply:", error)
         client_socket.close()
         return
-    else:
-        print("Invalid login format.")
+
+    print(format_server_reply(login_reply))
+
+    if login_reply != "LOGIN_SUCCESS":
         client_socket.close()
         return
 
@@ -98,9 +120,19 @@ def main():
             print("Invalid choice. Try again.")
             continue
 
-        client_socket.send(transaction_message.encode())
+        secure_send(client_socket, transaction_message, ENCRYPTION_KEY, MAC_KEY)
 
-        transaction_reply = client_socket.recv(1024).decode()
+        transaction_reply, error = secure_receive(
+            client_socket,
+            ENCRYPTION_KEY,
+            MAC_KEY,
+            "CLIENT"
+        )
+
+        if error is not None:
+            print("Could not securely receive transaction reply:", error)
+            break
+
         print(format_server_reply(transaction_reply))
 
         if transaction_reply == "GOODBYE":
