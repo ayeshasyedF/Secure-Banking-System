@@ -11,200 +11,114 @@ HOST = "127.0.0.1"
 PORT = 5000
 
 
-def print_menu():
-    print("\nChoose an option:")
-    print("1. Check Balance")
-    print("2. Deposit Money")
-    print("3. Withdraw Money")
-    print("4. Transfer Money")
-    print("5. Exit")
+class BankingClient:
+    def __init__(self):
+        self.client_socket = None
+        self.encryption_key = None
+        self.mac_key = None
+        self.username = None
 
+    # ---------------------------
+    # LOGIN
+    # ---------------------------
+    def login(self, username, password):
+        try:
+            auth_key = hash_password(password)
+            client_nonce = os.urandom(16).hex()
 
-def format_server_reply(reply):
-    parts = reply.split(",")
+            message_1 = f"{username}|{client_nonce}"
+            client_hmac = generate_hmac(message_1, auth_key)
 
-    if parts[0] == "BALANCE":
-        return f"Your current balance is: ${parts[1]}"
+            self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.client_socket.connect((HOST, PORT))
 
-    elif parts[0] == "DEPOSIT_SUCCESS":
-        return f"Deposit successful. New balance: ${parts[1]}"
+            packet_1 = {
+                "type": "KEY_EXCHANGE_1",
+                "username": username,
+                "client_nonce": client_nonce,
+                "hmac": client_hmac
+            }
 
-    elif parts[0] == "WITHDRAW_SUCCESS":
-        return f"Withdrawal successful. New balance: ${parts[1]}"
+            send_packet(self.client_socket, json.dumps(packet_1))
 
-    elif parts[0] == "TRANSFER_SUCCESS":
-        return f"Transfer successful. New balance: ${parts[1]}"
+            packet_text = receive_packet(self.client_socket)
+            if packet_text is None:
+                return False, "Server closed connection."
 
-    elif parts[0] == "LOGIN_SUCCESS":
-        return "Login successful."
+            packet_2 = json.loads(packet_text)
 
-    elif parts[0] == "LOGIN_FAILED":
-        return "Login failed. Please check your username or password."
+            if packet_2.get("type") == "KEY_EXCHANGE_ERROR":
+                return False, packet_2.get("message")
 
-    elif parts[0] == "INVALID_FORMAT":
-        return "Invalid message format."
+            server_nonce = packet_2.get("server_nonce")
+            server_hmac = packet_2.get("hmac")
 
-    elif parts[0] == "ERROR":
-        if len(parts) > 1:
-            if parts[1] == "INSUFFICIENT_FUNDS":
-                return "Transaction failed: insufficient funds."
-            elif parts[1] == "INVALID_AMOUNT":
-                return "Transaction failed: invalid amount."
-            elif parts[1] == "RECEIVER_NOT_FOUND":
-                return "Transaction failed: receiver not found."
-            elif parts[1] == "INVALID_DEPOSIT_FORMAT":
-                return "Deposit failed: invalid format."
-            elif parts[1] == "INVALID_WITHDRAW_FORMAT":
-                return "Withdrawal failed: invalid format."
-            elif parts[1] == "INVALID_TRANSFER_FORMAT":
-                return "Transfer failed: invalid format."
-            elif parts[1] == "UNKNOWN_COMMAND":
-                return "Unknown command."
-            elif parts[1] == "SECURE_COMMUNICATION_FAILED":
-                return "Secure communication failed."
-        return "An error occurred."
+            valid_server = verify_server_auth(
+                username,
+                client_nonce,
+                server_nonce,
+                server_hmac,
+                auth_key
+            )
 
-    elif parts[0] == "GOODBYE":
-        return "Session ended. Goodbye."
+            if not valid_server:
+                return False, "Server authentication failed."
 
-    return reply
+            master_secret = derive_master_secret(auth_key, client_nonce, server_nonce)
+            self.encryption_key, self.mac_key = derive_keys(master_secret)
 
+            login_reply, error = secure_receive(
+                self.client_socket,
+                self.encryption_key,
+                self.mac_key,
+                "CLIENT"
+            )
 
-def main():
-    username = input("Enter username: ")
-    password = input("Enter password: ")
+            if error is not None or login_reply != "LOGIN_SUCCESS":
+                return False, "Login failed."
 
-    auth_key = hash_password(password)
-    client_nonce = os.urandom(16).hex()
+            self.username = username
+            return True, "Login successful."
 
-    message_1 = f"{username}|{client_nonce}"
-    client_hmac = generate_hmac(message_1, auth_key)
+        except Exception as e:
+            return False, str(e)
 
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((HOST, PORT))
+    # ---------------------------
+    # SEND TRANSACTION
+    # ---------------------------
+    def send(self, message):
+        try:
+            secure_send(self.client_socket, message, self.encryption_key, self.mac_key)
 
-    # -------------------------------
-    # Message 1: client -> server
-    # -------------------------------
-    packet_1 = {
-        "type": "KEY_EXCHANGE_1",
-        "username": username,
-        "client_nonce": client_nonce,
-        "hmac": client_hmac
-    }
+            reply, error = secure_receive(
+                self.client_socket,
+                self.encryption_key,
+                self.mac_key,
+                "CLIENT"
+            )
 
-    send_packet(client_socket, json.dumps(packet_1))
+            if error:
+                return False, error
 
-    # -------------------------------
-    # Message 2: server -> client
-    # -------------------------------
-    packet_text = receive_packet(client_socket)
+            return True, reply
 
-    if packet_text is None:
-        print("Server closed the connection.")
-        client_socket.close()
-        return
+        except Exception as e:
+            return False, str(e)
 
-    try:
-        packet_2 = json.loads(packet_text)
-    except json.JSONDecodeError:
-        print("Invalid response from server.")
-        client_socket.close()
-        return
+    # ---------------------------
+    # ACTIONS
+    # ---------------------------
+    def deposit(self, amount):
+        return self.send(f"DEPOSIT,{amount}")
 
-    if packet_2.get("type") == "KEY_EXCHANGE_ERROR":
-        print("Key exchange failed:", packet_2.get("message"))
-        client_socket.close()
-        return
+    def withdraw(self, amount):
+        return self.send(f"WITHDRAW,{amount}")
 
-    if packet_2.get("type") != "KEY_EXCHANGE_2":
-        print("Unexpected protocol response.")
-        client_socket.close()
-        return
+    def check_balance(self):
+        return self.send("BALANCE")
 
-    server_nonce = packet_2.get("server_nonce")
-    server_hmac = packet_2.get("hmac")
-
-    valid_server = verify_server_auth(
-        username,
-        client_nonce,
-        server_nonce,
-        server_hmac,
-        auth_key
-    )
-
-    if not valid_server:
-        print("Server authentication failed.")
-        client_socket.close()
-        return
-
-    # -------------------------------
-    # Derive Master Secret and session keys
-    # -------------------------------
-    master_secret = derive_master_secret(auth_key, client_nonce, server_nonce)
-    encryption_key, mac_key = derive_keys(master_secret)
-
-    # Secure confirmation
-    login_reply, error = secure_receive(
-        client_socket,
-        encryption_key,
-        mac_key,
-        "CLIENT"
-    )
-
-    if error is not None:
-        print("Could not securely receive server reply:", error)
-        client_socket.close()
-        return
-
-    print(format_server_reply(login_reply))
-
-    if login_reply != "LOGIN_SUCCESS":
-        client_socket.close()
-        return
-
-    while True:
-        print_menu()
-        choice = input("Enter choice: ")
-
-        if choice == "1":
-            transaction_message = "BALANCE"
-        elif choice == "2":
-            amount = input("Enter amount to deposit: ")
-            transaction_message = f"DEPOSIT,{amount}"
-        elif choice == "3":
-            amount = input("Enter amount to withdraw: ")
-            transaction_message = f"WITHDRAW,{amount}"
-        elif choice == "4":
-            receiver = input("Enter receiver username: ")
-            amount = input("Enter amount to transfer: ")
-            transaction_message = f"TRANSFER,{receiver},{amount}"
-        elif choice == "5":
-            transaction_message = "EXIT"
-        else:
-            print("Invalid choice. Try again.")
-            continue
-
-        secure_send(client_socket, transaction_message, encryption_key, mac_key)
-
-        transaction_reply, error = secure_receive(
-            client_socket,
-            encryption_key,
-            mac_key,
-            "CLIENT"
-        )
-
-        if error is not None:
-            print("Could not securely receive transaction reply:", error)
-            break
-
-        print(format_server_reply(transaction_reply))
-
-        if transaction_reply == "GOODBYE":
-            break
-
-    client_socket.close()
-
-
-if __name__ == "__main__":
-    main()
+    def exit(self):
+        result = self.send("EXIT")
+        if self.client_socket:
+            self.client_socket.close()
+        return result
