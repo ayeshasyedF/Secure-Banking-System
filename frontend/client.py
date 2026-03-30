@@ -125,6 +125,12 @@ class BankingClient:
             if error:
                 return False, error
 
+            # Check if the transaction itself failed (starts with ERROR)
+            if reply.startswith("ERROR,"):
+                error_msg = reply.split(",", 1)[1] if "," in reply else reply
+                error_msg = error_msg.replace("_", " ").title()
+                return False, error_msg
+
             return True, reply
 
         except Exception as e:

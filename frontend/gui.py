@@ -9,6 +9,7 @@ from frontend.views.register_view import RegisterView
 from frontend.views.dashboard_view import DashboardView
 from frontend.views.transactions_view import TransactionsView
 from frontend.views.deposit_view import DepositView
+from frontend.views.withdraw_view import WithdrawView
 from frontend.views.balance_view import BalanceView
 from frontend.views.receipt_popup import ReceiptPopup
 
@@ -32,11 +33,14 @@ class BankingGUI:
         self.register_password_entry = None
         self.register_confirm_entry = None
         self.register_result_label = None
-        self.register_strength_label = None
 
         self.deposit_entry = None
         self.deposit_entry_frame = None
         self.deposit_result_label = None
+
+        self.withdraw_entry = None
+        self.withdraw_entry_frame = None
+        self.withdraw_result_label = None
 
         self.balance_display = None
         self.balance_timestamp = None
@@ -75,6 +79,10 @@ class BankingGUI:
     def show_transactions_screen(self):
         self.clear_screen()
         self.current_screen = TransactionsView(self).build()
+
+    def show_withdraw_screen(self):
+        self.clear_screen()
+        self.current_screen = WithdrawView(self).build()
 
     # -----------------------------
     # LOGIN
@@ -206,6 +214,48 @@ class BankingGUI:
         else:
             self.deposit_result_label.config(text=f"✕  {message}", fg=ERROR)
             ReceiptPopup(self.root, action="Deposit", amount=value, success=False, server_reply=message)
+
+    # -----------------------------
+    # WITHDRAW
+    # -----------------------------
+    def handle_withdraw(self):
+        try:
+            amount = self.withdraw_entry.get().strip()
+        except Exception as e:
+            messagebox.showerror("UI Error", str(e))
+            return
+
+        if not amount:
+            self.withdraw_result_label.config(text="✕  Please enter an amount.", fg=ERROR)
+            return
+
+        try:
+            value = float(amount)
+            if value <= 0:
+                self.withdraw_result_label.config(text="✕  Amount must be greater than $0.", fg=ERROR)
+                return
+        except ValueError:
+            self.withdraw_result_label.config(text="✕  Please enter a valid number.", fg=ERROR)
+            return
+
+        self.withdraw_result_label.config(text="Processing...", fg=ACCENT)
+        self.root.update()
+
+        try:
+            success, message = self.client.withdraw(amount)
+        except Exception as e:
+            messagebox.showerror("Withdraw Error", str(e))
+            return
+
+        print(f"[WITHDRAW] success={success}  message={message}")
+
+        if success:
+            self.withdraw_result_label.config(text="✓  Withdrawal successful.", fg=SUCCESS)
+            self.withdraw_entry.delete(0, tk.END)
+            ReceiptPopup(self.root, action="Withdraw", amount=value, success=True, server_reply=message)
+        else:
+            self.withdraw_result_label.config(text=f"✕  {message}", fg=ERROR)
+            ReceiptPopup(self.root, action="Withdraw", amount=value, success=False, server_reply=message)
 
     # -----------------------------
     # BALANCE

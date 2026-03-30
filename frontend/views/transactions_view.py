@@ -180,6 +180,8 @@ class TransactionsView:
                 display_details = "N/A"
             elif "Deposited" in details:
                 display_details = f"Amount: {details.split()[-1]}"
+            elif "Withdrew" in details:
+                display_details = f"Amount: {details.split()[-1]}"
             elif "New balance" in details:
                 display_details = f"Balance: {details.split()[-1]}"
             else:

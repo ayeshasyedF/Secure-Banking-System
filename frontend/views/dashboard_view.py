@@ -49,12 +49,14 @@ class DashboardView:
         nav_items = [
             ("▣  Dashboard", True),
             ("⬛  Deposit", False),
-            ("◻  Balance", False),
-            ("≡  Transactions", True),  # Changed to True
+            ("◻  Withdraw", False),
+            ("◉  Balance", False),
+            ("≡  Transactions", True),
         ]
 
         for label, active in nav_items:
             is_deposit = "Deposit" in label
+            is_withdraw = "Withdraw" in label
             is_balance = "Balance" in label
             is_transactions = "Transactions" in label
 
@@ -64,6 +66,8 @@ class DashboardView:
             cmd = None
             if is_deposit:
                 cmd = self.app.show_deposit_screen
+            elif is_withdraw:
+                cmd = self.app.show_withdraw_screen
             elif is_balance:
                 cmd = self.app.show_balance_screen
             elif is_transactions:
@@ -198,6 +202,18 @@ class DashboardView:
             btn_cmd=self.app.show_balance_screen,
             btn_color=ACCENT,
             btn_hover="#38bdf8",
+            active=True
+        )
+
+        self._make_action_card(
+            cards_row,
+            icon="▼",
+            title="WITHDRAW",
+            desc="Withdraw funds securely from your account with instant processing.",
+            btn_text="OPEN  →",
+            btn_cmd=self.app.show_withdraw_screen,
+            btn_color=RED,
+            btn_hover="#dc2626",
             active=True
         )
 

@@ -97,7 +97,7 @@ class BalanceView:
         self.app.balance_display = tk.Label(
             balance_frame,
             text="$ -.--",
-            font=("Courier New", 38, "bold"),
+            font=("Courier New", 28, "bold"),
             fg=TEXT_MUTED,
             bg=CARD_BG
         )

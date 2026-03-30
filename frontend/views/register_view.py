@@ -78,26 +78,7 @@ class RegisterView:
         tk.Label(form, text="CONFIRM PASSWORD", font=("Courier New", 9, "bold"), fg=TEXT_MUTED, bg=CARD_BG, anchor="w").pack(fill="x")
         self._confirm_frame = create_entry(form, show="●")
         self.app.register_confirm_entry = self._confirm_frame.entry_widget
-        self._confirm_frame.pack(pady=(4, 4), fill="x")
-
-        self._strength_bar_container = tk.Frame(form, bg=CARD_BG)
-        self._strength_bar_container.pack(fill="x", pady=(10, 4))
-
-        strength_row = tk.Frame(self._strength_bar_container, bg=CARD_BG)
-        strength_row.pack(fill="x")
-        tk.Label(strength_row, text="STRENGTH", font=("Courier New", 8), fg=TEXT_MUTED, bg=CARD_BG).pack(side="left")
-        self.app.register_strength_label = tk.Label(strength_row, text="", font=("Courier New", 8, "bold"), fg=TEXT_MUTED, bg=CARD_BG)
-        self.app.register_strength_label.pack(side="right")
-
-        bars_row = tk.Frame(self._strength_bar_container, bg=CARD_BG)
-        bars_row.pack(fill="x", pady=(4, 0))
-        self.strength_bars = []
-        for i in range(4):
-            bar = tk.Frame(bars_row, bg="#1e3a5f", height=4, width=70)
-            bar.pack(side="left", padx=(0, 4))
-            self.strength_bars.append(bar)
-
-        self.app.register_password_entry.bind("<KeyRelease>", self._update_strength)
+        self._confirm_frame.pack(pady=(4, 16), fill="x")
 
         register_btn = create_primary_button(card, "CREATE ACCOUNT  →", self.app.handle_register)
         register_btn.pack(padx=32, fill="x", ipady=4)
@@ -122,32 +103,3 @@ class RegisterView:
         self.app.register_result_label.pack(pady=(0, 8))
 
         return screen
-
-    def _update_strength(self, event=None):
-        password = self.app.register_password_entry.get()
-        strength = 0
-        if len(password) >= 8:
-            strength += 1
-        if any(c.isupper() for c in password):
-            strength += 1
-        if any(c.isdigit() for c in password):
-            strength += 1
-        if any(c in "!@#$%^&*()_+-=[]{}|;':\",./<>?" for c in password):
-            strength += 1
-
-        colors = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981"]
-        labels = ["WEAK", "FAIR", "GOOD", "STRONG"]
-
-        for i, bar in enumerate(self.strength_bars):
-            if i < strength:
-                bar.config(bg=colors[strength - 1])
-            else:
-                bar.config(bg="#1e3a5f")
-
-        if password:
-            self.app.register_strength_label.config(
-                text=labels[strength - 1] if strength > 0 else "",
-                fg=colors[strength - 1] if strength > 0 else TEXT_MUTED
-            )
-        else:
-            self.app.register_strength_label.config(text="")
