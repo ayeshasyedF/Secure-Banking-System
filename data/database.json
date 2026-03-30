@@ -17,8 +17,23 @@
         },
         {
             "username": "rikhina",
-            "password": "fe2592b42a727e977f055947385b709cc82b16b9a87f88c6abf3900d65d0cdc3",
-            "balance": 1300.0
+            "password": "056d541ae955943ba4fc4922b9d3aefb05750da07636ab68d957873690d99108",
+            "balance": 1550.0
+        },
+        {
+            "username": "testuser123",
+            "password": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+            "balance": 0.0
+        },
+        {
+            "username": "mango",
+            "password": "6815f3c300383519de8e437497e2c3e97852fe8d717a5419d5aafb00cb43c494",
+            "balance": 0.0
+        },
+        {
+            "username": "mango27",
+            "password": "6815f3c300383519de8e437497e2c3e97852fe8d717a5419d5aafb00cb43c494",
+            "balance": 400.0
         }
     ]
 }

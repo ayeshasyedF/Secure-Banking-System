@@ -3,6 +3,7 @@ import os
 import socket
 
 from backend.auth import hash_password, verify_server_auth, derive_master_secret
+from backend.database_handler import load_data, save_data, find_user
 from crypto.hmac_utils import generate_hmac
 from crypto.kdf_utils import derive_keys
 from crypto.crypto_utils import secure_send, secure_receive, send_packet, receive_packet
@@ -17,6 +18,30 @@ class BankingClient:
         self.encryption_key = None
         self.mac_key = None
         self.username = None
+
+    # ---------------------------
+    # REGISTER
+    # ---------------------------
+    def register(self, username, password):
+        """
+        Register a new user by writing directly to the database.
+        Stores the password as sha256(password) — same hash login uses.
+        """
+        try:
+            if find_user(username):
+                return False, "Username already exists."
+
+            hashed = hash_password(password)
+            data = load_data()
+            data["users"].append({
+                "username": username,
+                "password": hashed,
+                "balance": 0.0
+            })
+            save_data(data)
+            return True, "Registration successful."
+        except Exception as e:
+            return False, str(e)
 
     # ---------------------------
     # LOGIN
