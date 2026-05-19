@@ -1,5 +1,6 @@
 import json
 import socket
+import threading
 
 from backend.auth import (
     verify_client_auth,
@@ -158,7 +159,9 @@ def main():
 
     while True:
         client_socket, client_address = server_socket.accept()
-        handle_client(client_socket, client_address)
+        # Create a new thread for each client
+        client_thread = threading.Thread(target=handle_client, args=(client_socket, client_address))
+        client_thread.start()
 
 
 if __name__ == "__main__":
